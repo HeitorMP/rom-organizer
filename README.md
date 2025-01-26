@@ -10,7 +10,8 @@ Requirements
 
 To use the script, run it from the command line with the following syntax:
 ```bash
-python organize_roms.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country=<country>]
+python rom-organizer.py --help
+python rom-organizer.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country=<country>]
 ```
 
 ### Parameters
@@ -22,19 +23,20 @@ python organize_roms.py <source_directory> <destination_directory> [-d] [-u] [-p
 - -p: Move ROMs containing "(prototype)" in their names.
 - -P: Move ROMs containing "(pirate)" in their names.
 - --country=<country>: Move ROMs that contain the specified country name in their filenames. (Example: --country=Brazil)
+- --help: Usage
 
 ### Examples
 Example 1: Move ROMs with "demo" and "unl" to the destination directory
 ```bash
-python organize_roms.py /path/to/roms /path/to/destination -d -u
+python rom-organizer.py /path/to/roms /path/to/destination -d -u
 ```
 Example 2: Move ROMs with "demo", "unl", and "prototype", and filter by country "Brazil"
 ```bash
-python organize_roms.py /path/to/roms /path/to/destination -d -u -p --country=Brazil
+python rom-organizer.py /path/to/roms /path/to/destination -d -u -p --country=Brazil
 ```
 Example 3: Move ROMs with "prototype" and "unl"
 ```bash
-python organize_roms.py /path/to/roms /path/to/destination -up
+python rom-organizer.py /path/to/roms /path/to/destination -up
 ```
 
 ### Notes
