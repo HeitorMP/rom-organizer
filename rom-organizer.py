@@ -14,7 +14,6 @@ def move_roms(source_dir, destination_dir, opt_dict):
     prototype_pattern = re.compile(r'\(prototype\)', re.IGNORECASE) if opt_dict['p'] else None
     country_pattern = re.compile(rf'{opt_dict["country"]}', re.IGNORECASE) if opt_dict['country'] else None
 
-    # Use a set to track filenames and avoid duplicates
     seen = set()
 
     # Traverse through all files in the source directory and subdirectories
@@ -22,36 +21,49 @@ def move_roms(source_dir, destination_dir, opt_dict):
         for file in files:
             file_name = os.path.splitext(file)[0]  # Get the file name without extension
 
-            # Skip duplicate files
+            # Avoid duplicated file name
             if file_name in seen:
                 continue
             seen.add(file_name)
 
-            # Check if the file matches the demo, unl, prototype, or country criteria
-            should_move = True
+            # Assume the file should be moved, and only change to False if none of the filters match
+            should_move = False
 
-            # Filter by demo
-            if demo_pattern and not demo_pattern.search(file_name):
-                should_move = False
+            # Check demo filter
+            if demo_pattern and demo_pattern.search(file_name):
+                should_move = True  # Move if demo is found
 
-            # Filter by unl
-            if unl_pattern and not unl_pattern.search(file_name):
-                should_move = False
+            # Check unl filter
+            if unl_pattern and unl_pattern.search(file_name):
+                should_move = True  # Move if unl is found
 
-            # Filter by prototype
-            if prototype_pattern and not prototype_pattern.search(file_name):
-                should_move = False
+            # Check prototype filter
+            if prototype_pattern and prototype_pattern.search(file_name):
+                should_move = True  # Move if prototype is found
 
-            # Filter by country
-            if country_pattern and not country_pattern.search(file_name):
-                should_move = False
+            # Check country filter
+            if country_pattern and country_pattern.search(file_name):
+                should_move = True  # Move if country is found
 
-            # If the file matches the criteria, move it
+            # If the file matches at least one filter, move or copy
             if should_move:
-                print(f"Moving file: {file} to {destination_dir}")
-                shutil.move(os.path.join(root, file), destination_dir)
+                # Determine the destination file path
+                dest_file_path = os.path.join(destination_dir, file)
+                
+                # Check if the file already exists in the destination directory
+                if os.path.exists(dest_file_path):
+                    # If it exists, copy the file and overwrite the existing one
+                    shutil.copy(os.path.join(root, file), dest_file_path)
+                    print(f"Copied (overwritten) file: {file} to {dest_file_path}")
+                    os.remove(os.path.join(root, file))
+                else:
+                    # If it does not exist, move the file
+                    shutil.move(os.path.join(root, file), dest_file_path)
+                    print(f"Moved file: {file} to {dest_file_path}")
+
 
     print("Organization completed!")
+
 
 # Main entry point of the script
 if __name__ == '__main__':
@@ -91,5 +103,6 @@ if __name__ == '__main__':
                 sys.exit(1)
             opt_dict["country"] = country
 
+    
     # Call the move_roms function with the appropriate parameters
     move_roms(source_dir, destination_dir, opt_dict)
