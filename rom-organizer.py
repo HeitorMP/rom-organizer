@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import shutil
 import sys
@@ -11,7 +13,7 @@ def move_roms(source_dir, destination_dir, opt_dict):
     # Compile regular expressions for demo, unl, prototype, and country filter
     demo_pattern = re.compile(r'\(demo\)', re.IGNORECASE) if opt_dict['d'] else None
     unl_pattern = re.compile(r'\(unl\)', re.IGNORECASE) if opt_dict['u'] else None
-    prototype_pattern = re.compile(r'\(prototype\)', re.IGNORECASE) if opt_dict['p'] else None
+    prototype_pattern = re.compile(r'\((?:prototype|proto)\)', re.IGNORECASE) if opt_dict['p'] else None
     country_pattern = re.compile(rf'{opt_dict["country"]}', re.IGNORECASE) if opt_dict['country'] else None
 
     seen = set()
