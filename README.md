@@ -23,6 +23,7 @@ python rom-organizer.py <source_directory> <destination_directory> [-d] [-u] [-p
 - -p: Move ROMs containing "(prototype)" in their names.
 - -P: Move ROMs containing "(pirate)" in their names.
 - --country=<country>: Move ROMs that contain the specified country name in their filenames. (Example: --country=Brazil)
+- --verbose= Show files copy/move messages
 - --help: Usage
 
 ### Examples

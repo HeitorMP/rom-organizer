@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import re
+import hashlib
 
 def display_help():
     """Displays usage instructions and details about each parameter."""
@@ -14,7 +15,7 @@ ROM Organizer Script
 This script helps you organize ROM files by moving them to a destination directory based on filters like "demo", "unl", "prototype", "pirate", or a specific country.
 
 Usage:
-    python rom-organizer.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country=<country>] [--help]
+    python script.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country=<country>] [--dat=<dat_file>] [--verbose] [--help]
 
 Options:
     <source_directory>       Directory where the ROM files are located.
@@ -25,25 +26,43 @@ Options:
     -p                       Move ROMs containing "(prototype)" or "(proto)" in their filenames.
     -P                       Move ROMs containing "(pirate)" in their filenames (alternative to -u).
     --country=<country>      Move ROMs containing the specified country name in their filenames.
+    --dat=<dat_file>         Filter ROMs by MD5 using the provided .dat file.
+    --verbose                Print detailed logs of the operations being performed.
     --help                   Display this help message and exit.
-
-Examples:
-    # Move ROMs with "(demo)" and "(unl)" in their filenames:
-    python rom-organizer.py /path/to/source /path/to/destination -d -u
-
-    # Move ROMs with "(prototype)" and country "Brazil" in their filenames:
-    python rom-organizer.py /path/to/source /path/to/destination -p --country=Brazil
-
-    # Move ROMs with all filters and country "USA":
-    python rom-organizer.py /path/to/source /path/to/destination -d -u -p --country=USA
-
-Notes:
-    - If a file matches multiple filters, it will still be moved only once.
-    - The script overwrites files in the destination directory if duplicates are found.
 """
     print(help_text)
 
-def move_roms(source_dir, destination_dir, opt_dict):
+def get_md5_from_dat(dat_file):
+    """Reads a .dat file and returns a set of MD5 hashes from the ROM entries."""
+    md5_set = set()
+    try:
+        with open(dat_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # Find all MD5 hashes in the format md5 <hash>
+            md5_matches = re.findall(r'md5\s+([A-F0-9]{32})', content, re.IGNORECASE)
+            md5_set = set(md5_matches)
+    except Exception as e:
+        print(f"Erro ao ler o arquivo .dat: {e}")
+        sys.exit(1)
+    
+    return md5_set
+
+def get_file_md5(file_path):
+    """Calculates the MD5 hash of a file."""
+    hash_md5 = hashlib.md5()
+    try:
+        with open(file_path, "rb") as f:
+            # Read the file in chunks to handle large files
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+    except Exception as e:
+        print(f"Erro ao calcular o MD5 do arquivo {file_path}: {e}")
+        return None
+    
+    return hash_md5.hexdigest().upper()
+
+def move_roms(source_dir, destination_dir, opt_dict, md5_set, verbose=False):
+    """Moves or copies ROM files based on the provided filters."""
     # Check if the destination directory exists, if not, create it
     if not os.path.exists(destination_dir):
         os.makedirs(destination_dir)
@@ -56,6 +75,7 @@ def move_roms(source_dir, destination_dir, opt_dict):
     country_pattern = re.compile(rf'{opt_dict["country"]}', re.IGNORECASE) if opt_dict['country'] else None
 
     seen = set()
+    moved_count = 0
 
     # List files in the source directory (no subdirectories)
     for file in os.listdir(source_dir):
@@ -95,6 +115,14 @@ def move_roms(source_dir, destination_dir, opt_dict):
         if country_pattern and country_pattern.search(file_name):
             should_move = True
 
+        # If a dat file was provided, check the MD5
+        if md5_set:
+            file_md5 = get_file_md5(file_path)
+            if file_md5 and file_md5 in md5_set:
+                should_move = True
+            else:
+                should_move = False
+
         # If the file matches at least one filter, move or copy
         if should_move:
             dest_file_path = os.path.join(destination_dir, file)
@@ -102,19 +130,23 @@ def move_roms(source_dir, destination_dir, opt_dict):
             # Check if the file already exists in the destination directory
             if os.path.exists(dest_file_path):
                 shutil.copy(file_path, dest_file_path)
-                print(f"Copied (overwritten) file: {file} to {dest_file_path}")
+                if verbose:
+                    print(f"Copied (overwritten) file: {file} to {dest_file_path}")
                 os.remove(file_path)
             else:
                 shutil.move(file_path, dest_file_path)
-                print(f"Moved file: {file} to {dest_file_path}")
+                if verbose:
+                    print(f"Moved file: {file} to {dest_file_path}")
 
-    print("Organization completed!")
+            moved_count += 1
 
+    # Final summary
+    print(f"Organization completed! Total files moved: {moved_count}")
 
 # Main entry point of the script
 if __name__ == '__main__':
     # Check if we have the correct number of arguments
-    if len(sys.argv) < 2 or '--help' in sys.argv:
+    if len(sys.argv) < 4 or '--help' in sys.argv:
         display_help()
         sys.exit(0)
 
@@ -128,8 +160,11 @@ if __name__ == '__main__':
         "u": False,
         "p": False,
         "P": False,
-        "country": None
+        "country": None,
+        "dat": None
     }
+
+    verbose = False
 
     # Process the arguments
     args = sys.argv[3:]
@@ -149,6 +184,20 @@ if __name__ == '__main__':
                 print("Error: Missing country name after --country=")
                 sys.exit(1)
             opt_dict["country"] = country
+        elif arg.startswith('--dat'):
+            # Extract .dat file path from "--dat=<dat_file>"
+            dat_file = arg.split('=')[1] if '=' in arg else None
+            if not dat_file or not os.path.exists(dat_file):
+                print("Error: Invalid .dat file path.")
+                sys.exit(1)
+            opt_dict["dat"] = dat_file
+        elif arg == '--verbose':
+            verbose = True
+
+    # If a .dat file was provided, get the MD5 hashes
+    md5_set = set()
+    if opt_dict["dat"]:
+        md5_set = get_md5_from_dat(opt_dict["dat"])
 
     # Call the move_roms function with the appropriate parameters
-    move_roms(source_dir, destination_dir, opt_dict)
+    move_roms(source_dir, destination_dir, opt_dict, md5_set, verbose)
