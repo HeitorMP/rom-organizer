@@ -13,56 +13,65 @@ def move_roms(source_dir, destination_dir, opt_dict):
     # Compile regular expressions for demo, unl, prototype, and country filter
     demo_pattern = re.compile(r'\(demo\)', re.IGNORECASE) if opt_dict['d'] else None
     unl_pattern = re.compile(r'\(unl\)', re.IGNORECASE) if opt_dict['u'] else None
+    unl_pattern = re.compile(r'\(pirate\)', re.IGNORECASE) if opt_dict['u'] else None
     prototype_pattern = re.compile(r'\((?:prototype|proto)\)', re.IGNORECASE) if opt_dict['p'] else None
     country_pattern = re.compile(rf'{opt_dict["country"]}', re.IGNORECASE) if opt_dict['country'] else None
 
     seen = set()
 
-    # Traverse through all files in the source directory and subdirectories
-    for root, dirs, files in os.walk(source_dir):
-        for file in files:
-            file_name = os.path.splitext(file)[0]  # Get the file name without extension
+    # List files in the source directory (no subdirectories)
+    for file in os.listdir(source_dir):
+        file_path = os.path.join(source_dir, file)
 
-            # Avoid duplicated file name
-            if file_name in seen:
-                continue
-            seen.add(file_name)
+        # Skip directories
+        if not os.path.isfile(file_path):
+            continue
 
-            # Assume the file should be moved, and only change to False if none of the filters match
-            should_move = False
+        file_name = os.path.splitext(file)[0]  # Get the file name without extension
 
-            # Check demo filter
-            if demo_pattern and demo_pattern.search(file_name):
-                should_move = True  # Move if demo is found
+        # Avoid duplicated file name
+        if file_name in seen:
+            continue
+        seen.add(file_name)
 
-            # Check unl filter
-            if unl_pattern and unl_pattern.search(file_name):
-                should_move = True  # Move if unl is found
+        # Assume the file should be moved, and only change to False if none of the filters match
+        should_move = False
 
-            # Check prototype filter
-            if prototype_pattern and prototype_pattern.search(file_name):
-                should_move = True  # Move if prototype is found
+        # Check demo filter
+        if demo_pattern and demo_pattern.search(file_name):
+            should_move = True  # Move if demo is found
 
-            # Check country filter
-            if country_pattern and country_pattern.search(file_name):
-                should_move = True  # Move if country is found
+        # Check unl filter
+        if unl_pattern and unl_pattern.search(file_name):
+            should_move = True  # Move if unl is found
 
-            # If the file matches at least one filter, move or copy
-            if should_move:
-                # Determine the destination file path
-                dest_file_path = os.path.join(destination_dir, file)
-                
-                # Check if the file already exists in the destination directory
-                if os.path.exists(dest_file_path):
-                    # If it exists, copy the file and overwrite the existing one
-                    shutil.copy(os.path.join(root, file), dest_file_path)
-                    print(f"Copied (overwritten) file: {file} to {dest_file_path}")
-                    os.remove(os.path.join(root, file))
-                else:
-                    # If it does not exist, move the file
-                    shutil.move(os.path.join(root, file), dest_file_path)
-                    print(f"Moved file: {file} to {dest_file_path}")
+        # Check prototype filter
+        if prototype_pattern and prototype_pattern.search(file_name):
+            should_move = True  # Move if prototype is found
+        
+        # Check pirate filter
+        if prototype_pattern and prototype_pattern.search(file_name):
+            should_move = True  # Move if prototype is found
 
+        # Check country filter
+        if country_pattern and country_pattern.search(file_name):
+            should_move = True  # Move if country is found
+
+        # If the file matches at least one filter, move or copy
+        if should_move:
+            # Determine the destination file path
+            dest_file_path = os.path.join(destination_dir, file)
+            
+            # Check if the file already exists in the destination directory
+            if os.path.exists(dest_file_path):
+                # If it exists, overwrite the file
+                shutil.copy(file_path, dest_file_path)
+                print(f"Copied (overwritten) file: {file} to {dest_file_path}")
+                os.remove(file_path)
+            else:
+                # If it does not exist, move the file
+                shutil.move(file_path, dest_file_path)
+                print(f"Moved file: {file} to {dest_file_path}")
 
     print("Organization completed!")
 
@@ -71,7 +80,7 @@ def move_roms(source_dir, destination_dir, opt_dict):
 if __name__ == '__main__':
     # Check if we have the correct number of arguments
     if len(sys.argv) < 4:
-        print("Usage: python script.py <source_directory> <destination_directory> [-d] [-u] [-p] [--country <country>]")
+        print("Usage: python script.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country <country>]")
         sys.exit(1)
 
     # Source and destination directories
@@ -83,6 +92,7 @@ if __name__ == '__main__':
         "d": False,
         "u": False,
         "p": False,
+        "P": False,
         "country": None
     }
 
@@ -105,6 +115,5 @@ if __name__ == '__main__':
                 sys.exit(1)
             opt_dict["country"] = country
 
-    
     # Call the move_roms function with the appropriate parameters
     move_roms(source_dir, destination_dir, opt_dict)

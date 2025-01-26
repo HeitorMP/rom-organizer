@@ -10,7 +10,7 @@ Requirements
 
 To use the script, run it from the command line with the following syntax:
 ```bash
-python organize_roms.py <source_directory> <destination_directory> [-d] [-u] [-p] [--country=<country>]
+python organize_roms.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country=<country>]
 ```
 
 ### Parameters
@@ -20,6 +20,7 @@ python organize_roms.py <source_directory> <destination_directory> [-d] [-u] [-p
 - -d: Move ROMs containing "(demo)" in their names.
 - -u: Move ROMs containing "(unl)" in their names.
 - -p: Move ROMs containing "(prototype)" in their names.
+- -P: Move ROMs containing "(pirate)" in their names.
 - --country=<country>: Move ROMs that contain the specified country name in their filenames. (Example: --country=Brazil)
 
 ### Examples
