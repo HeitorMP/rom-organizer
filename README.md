@@ -22,8 +22,9 @@ python rom-organizer.py <source_directory> <destination_directory> [-d] [-u] [-p
 - -u: Move ROMs containing "(unl)" in their names.
 - -p: Move ROMs containing "(prototype)" in their names.
 - -P: Move ROMs containing "(pirate)" in their names.
-- --country=<country>: Move ROMs that contain the specified country name in their filenames. (Example: --country=Brazil)
-- --verbose= Show files copy/move messages
+- --dat=<file.dat>: Move ROMs using libretro dat file as filter.
+- --country=<country>: Move ROMs that contain the specified country name in their filenames. (Example: --country=Brazil).
+- --verbose= Show files copy/move messages.
 - --help: Usage
 
 ### Examples
@@ -39,6 +40,10 @@ Example 3: Move ROMs with "prototype" and "unl"
 ```bash
 python rom-organizer.py /path/to/roms /path/to/destination -up
 ```
+
+### DAT files download:
+
+[libretro dat files](https://github.com/libretro/libretro-database/tree/master/metadat/no-intro)
 
 ### Notes
 
