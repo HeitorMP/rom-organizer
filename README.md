@@ -22,7 +22,7 @@ To use the script, run it from the command line with the following syntax:
 - **-u**                       Process ROMs containing "(unl)" or "(pirate)" in their filenames.
 - **-p**                       Process ROMs containing "(prototype)" or "(proto)" in their filenames.
 - **-P**                       Process ROMs containing "(pirate)" in their filenames (alternative to -u).
-- **--country=<country>**      Process ROMs containing the specified country name in their filenames.
+- **--country=<'country'>**      Process ROMs containing the specified country name in their filenames.
 - **--dat=<dat_file>**         Filter ROMs by MD5 using the provided .dat file. If the file is a .zip, it will be temporarily extracted for MD5 checking.
 - **--move**                   Move files instead of copying them. If this flag is omitted, files will be copied.
 - **--verbose**                Print detailed logs of the operations being performed.
