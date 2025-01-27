@@ -27,6 +27,7 @@ Options:
     -d                       Process ROMs containing "(demo)" in their filenames.
     -u                       Process ROMs containing "(unl)" or "(pirate)" in their filenames.
     -p                       Process ROMs containing "(prototype)" or "(proto)" in their filenames.
+    -b                       Process ROMs containing "(beta)" in their filenames.
     -P                       Process ROMs containing "(pirate)" in their filenames (alternative to -u).
     --country=<country>      Process ROMs containing the specified country name in their filenames.
     --dat=<dat_file>         Filter ROMs by MD5 using the provided .dat file.
@@ -110,6 +111,7 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
     demo_pattern = re.compile(r'\(demo\)', re.IGNORECASE) if opt_dict['d'] else None
     unl_pattern = re.compile(r'\(unl\)', re.IGNORECASE) if opt_dict['u'] else None
     pirate_pattern = re.compile(r'\(pirate\)', re.IGNORECASE) if opt_dict['P'] else None
+    beta_pattern = re.compile(r'\(beta\)', re.IGNORECASE) if opt_dict['b'] else None
     prototype_pattern = re.compile(r'\((?:prototype|proto)\)', re.IGNORECASE) if opt_dict['p'] else None
     country_pattern = re.compile(rf'{opt_dict["country"]}', re.IGNORECASE) if opt_dict['country'] else None
 
@@ -140,6 +142,9 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
             should_process = True
 
         if prototype_pattern and prototype_pattern.search(file_name):
+            should_process = True
+        
+        if beta_pattern and beta_pattern.search(file_name):
             should_process = True
 
         if country_pattern and country_pattern.search(file_name):
@@ -194,6 +199,7 @@ if __name__ == '__main__':
         "d": False,
         "u": False,
         "p": False,
+        "b": False,
         "P": False,
         "country": None,
         "dat": None
