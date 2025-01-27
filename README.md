@@ -16,16 +16,17 @@ python rom-organizer.py <source_directory> <destination_directory> [-d] [-u] [-p
 
 ### Parameters
 
-- <source_directory>: The directory where your ROM files are currently located.
-- <destination_directory>: The directory where you want to move the filtered ROM files.
-- -d: Move ROMs containing "(demo)" in their names.
-- -u: Move ROMs containing "(unl)" in their names.
-- -p: Move ROMs containing "(prototype)" in their names.
-- -P: Move ROMs containing "(pirate)" in their names.
-- --dat=<file.dat>: Move ROMs using libretro dat file as filter.
-- --country=<country>: Move ROMs that contain the specified country name in their filenames. (Example: --country=Brazil).
-- --verbose= Show files copy/move messages.
-- --help: Usage
+- <source_directory>       Directory where the ROM files are located.
+- <destination_directory>  Directory where the filtered ROM files will be copied or moved.
+- -d                       Process ROMs containing "(demo)" in their filenames.
+- -u                       Process ROMs containing "(unl)" or "(pirate)" in their filenames.
+- -p                       Process ROMs containing "(prototype)" or "(proto)" in their filenames.
+- -P                       Process ROMs containing "(pirate)" in their filenames (alternative to -u).
+- --country=<country>      Process ROMs containing the specified country name in their filenames.
+- --dat=<dat_file>         Filter ROMs by MD5 using the provided .dat file. If the file is a .zip, it will be temporarily extracted for MD5 checking.
+- --move                   Move files instead of copying them. If this flag is omitted, files will be copied.
+- --verbose                Print detailed logs of the operations being performed.
+- --help                   Display this help message and exit.
 
 ### Examples
 Example 1: Move ROMs with "demo" and "unl" to the destination directory

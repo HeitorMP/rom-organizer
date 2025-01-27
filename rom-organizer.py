@@ -5,6 +5,9 @@ import shutil
 import sys
 import re
 import hashlib
+import zipfile
+import tempfile
+
 
 def display_help():
     """Displays usage instructions and details about each parameter."""
@@ -12,25 +15,28 @@ def display_help():
 ROM Organizer Script
 =====================
 
-This script helps you organize ROM files by moving them to a destination directory based on filters like "demo", "unl", "prototype", "pirate", or a specific country.
+This script helps you organize ROM files by copying or moving them to a destination directory based on filters like "demo", "unl", "prototype", "pirate", or a specific country.
 
 Usage:
-    python script.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country=<country>] [--dat=<dat_file>] [--verbose] [--help]
+    python script.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country=<country>] [--dat=<dat_file>] [--move] [--verbose] [--help]
 
 Options:
     <source_directory>       Directory where the ROM files are located.
-    <destination_directory>  Directory where the filtered ROM files will be moved.
+    <destination_directory>  Directory where the filtered ROM files will be copied or moved.
 
-    -d                       Move ROMs containing "(demo)" in their filenames.
-    -u                       Move ROMs containing "(unl)" or "(pirate)" in their filenames.
-    -p                       Move ROMs containing "(prototype)" or "(proto)" in their filenames.
-    -P                       Move ROMs containing "(pirate)" in their filenames (alternative to -u).
-    --country=<country>      Move ROMs containing the specified country name in their filenames.
+    -d                       Process ROMs containing "(demo)" in their filenames.
+    -u                       Process ROMs containing "(unl)" or "(pirate)" in their filenames.
+    -p                       Process ROMs containing "(prototype)" or "(proto)" in their filenames.
+    -P                       Process ROMs containing "(pirate)" in their filenames (alternative to -u).
+    --country=<country>      Process ROMs containing the specified country name in their filenames.
     --dat=<dat_file>         Filter ROMs by MD5 using the provided .dat file.
+                             If the file is a .zip, it will be temporarily extracted for MD5 checking.
+    --move                   Move files instead of copying them. If this flag is omitted, files will be copied.
     --verbose                Print detailed logs of the operations being performed.
     --help                   Display this help message and exit.
 """
     print(help_text)
+
 
 def get_md5_from_dat(dat_file):
     """Reads a .dat file and returns a set of MD5 hashes from the ROM entries."""
@@ -42,27 +48,61 @@ def get_md5_from_dat(dat_file):
             md5_matches = re.findall(r'md5\s+([A-F0-9]{32})', content, re.IGNORECASE)
             md5_set = set(md5_matches)
     except Exception as e:
-        print(f"Erro ao ler o arquivo .dat: {e}")
+        print(f"Error reading the .dat file: {e}")
         sys.exit(1)
-    
+
     return md5_set
+
 
 def get_file_md5(file_path):
     """Calculates the MD5 hash of a file."""
     hash_md5 = hashlib.md5()
     try:
         with open(file_path, "rb") as f:
-
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_md5.update(chunk)
     except Exception as e:
-        print(f"Erro ao calcular o MD5 do arquivo {file_path}: {e}")
+        print(f"Error calculating MD5 of the file {file_path}: {e}")
         return None
-    
+
     return hash_md5.hexdigest().upper()
 
-def move_roms(source_dir, destination_dir, opt_dict, md5_set, verbose=False):
-    """Moves or copies ROM files based on the provided filters."""
+
+def process_zip_file(zip_path, md5_set, verbose):
+    """Processes a zip file by extracting, checking MD5s, and re-zipping if necessary."""
+    temp_dir = tempfile.mkdtemp()
+
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(temp_dir)
+
+        # Check extracted files against the MD5 set
+        matched = False
+        for root, _, files in os.walk(temp_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                file_md5 = get_file_md5(file_path)
+                if file_md5 and file_md5 in md5_set:
+                    matched = True
+                    if verbose:
+                        print(f"Matched MD5 for file inside zip: {file}")
+                    break
+
+        # Re-zip the content back
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
+            for root, _, files in os.walk(temp_dir):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    arcname = os.path.relpath(full_path, temp_dir)
+                    zip_ref.write(full_path, arcname)
+
+        return matched
+    finally:
+        shutil.rmtree(temp_dir)
+
+
+def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, verbose=False):
+    """Copies or moves ROM files based on the provided filters."""
     if not os.path.exists(destination_dir):
         os.makedirs(destination_dir)
 
@@ -74,7 +114,7 @@ def move_roms(source_dir, destination_dir, opt_dict, md5_set, verbose=False):
     country_pattern = re.compile(rf'{opt_dict["country"]}', re.IGNORECASE) if opt_dict['country'] else None
 
     seen = set()
-    moved_count = 0
+    processed_count = 0
 
     for file in os.listdir(source_dir):
         file_path = os.path.join(source_dir, file)
@@ -88,56 +128,64 @@ def move_roms(source_dir, destination_dir, opt_dict, md5_set, verbose=False):
             continue
         seen.add(file_name)
 
-        should_move = False
+        should_process = False
 
         if demo_pattern and demo_pattern.search(file_name):
-            should_move = True
+            should_process = True
 
         if unl_pattern and unl_pattern.search(file_name):
-            should_move = True
+            should_process = True
 
         if pirate_pattern and pirate_pattern.search(file_name):
-            should_move = True
+            should_process = True
 
         if prototype_pattern and prototype_pattern.search(file_name):
-            should_move = True
+            should_process = True
 
         if country_pattern and country_pattern.search(file_name):
-            should_move = True
+            should_process = True
 
-        # DAT
+        # DAT file filtering
         if md5_set:
-            file_md5 = get_file_md5(file_path)
-            if file_md5 and file_md5 in md5_set:
-                should_move = True
+            if file.lower().endswith('.zip'):
+                if process_zip_file(file_path, md5_set, verbose):
+                    should_process = True
             else:
-                should_move = False
+                file_md5 = get_file_md5(file_path)
+                if file_md5 and file_md5 in md5_set:
+                    should_process = True
+                else:
+                    should_process = False
 
-        if should_move:
+        if should_process:
             dest_file_path = os.path.join(destination_dir, file)
-            
-            # Copy if exists move if dont
-            if os.path.exists(dest_file_path):
+
+            # Move or copy file
+            if move_files:
+                if os.path.exists(dest_file_path):
+                    shutil.copy(file_path, dest_file_path)
+                    if verbose:
+                        print(f"Copied (overwritten) file: {file} to {dest_file_path}")
+                    os.remove(file_path)
+                else:
+                    shutil.move(file_path, dest_file_path)
+                    if verbose:
+                        print(f"Moved file: {file} to {dest_file_path}")
+            else:
                 shutil.copy(file_path, dest_file_path)
                 if verbose:
-                    print(f"Copied (overwritten) file: {file} to {dest_file_path}")
-                os.remove(file_path)
-            else:
-                shutil.move(file_path, dest_file_path)
-                if verbose:
-                    print(f"Moved file: {file} to {dest_file_path}")
+                    print(f"Copied file: {file} to {dest_file_path}")
 
-            moved_count += 1
+            processed_count += 1
 
-    print(f"Organization completed! Total files moved: {moved_count}")
+    print(f"Organization completed! Total files processed: {processed_count}")
+
 
 # Main entry point of the script
 if __name__ == '__main__':
-
     if len(sys.argv) < 4 or '--help' in sys.argv:
         display_help()
         sys.exit(0)
-
 
     source_dir = sys.argv[1]
     destination_dir = sys.argv[2]
@@ -152,6 +200,7 @@ if __name__ == '__main__':
     }
 
     verbose = False
+    move_files = False
 
     args = sys.argv[3:]
     for arg in args:
@@ -176,10 +225,12 @@ if __name__ == '__main__':
             opt_dict["dat"] = dat_file
         elif arg == '--verbose':
             verbose = True
+        elif arg == '--move':
+            move_files = True
 
     # If a .dat file was provided, get the MD5 hashes
     md5_set = set()
     if opt_dict["dat"]:
         md5_set = get_md5_from_dat(opt_dict["dat"])
 
-    move_roms(source_dir, destination_dir, opt_dict, md5_set, verbose)
+    process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, verbose)
