@@ -1,2 +1,2 @@
 .env
-.consoles.json
+*.json

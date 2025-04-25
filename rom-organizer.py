@@ -18,10 +18,10 @@ def display_help():
 ROM Organizer Script
 =====================
 
-This script helps you organize ROM files by copying or moving them to a destination directory based on filters like "demo", "unl", "prototype", "pirate", or a specific country.
+This script helps you organize ROM files by copying or moving them to a destination directory based on filters like "demo", "unl", "prototype", "pirate", or a specific word.
 
 Usage:
-    python script.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--country=<country>] [--dat=<dat_file>] [--move] [--verbose] [--help]
+    python script.py <source_directory> <destination_directory> [-d] [-u] [-p] [-P] [--grep=<key word>] [--dat=<dat_file>] [--move] [--verbose] [--help]
 
 Options:
     <source_directory>       Directory where the ROM files are located.
@@ -31,14 +31,17 @@ Options:
     -u                       Process ROMs containing "(unl)" or "(pirate)" in their filenames.
     -p                       Process ROMs containing "(prototype)" or "(proto)" in their filenames.
     -P                       Process ROMs containing "(pirate)" in their filenames (alternative to -u).
-    --country=<country>      Process ROMs containing the specified country name in their filenames.
+    --grep=<key word>        Process ROMs containing the specified key word in their filenames.
     --dat=<dat_file>         Filter ROMs by MD5 using the provided .dat file.
                              If the file is a .zip, it will be temporarily extracted for MD5 checking.
+    --cheevos=<console_id>   Filter ROMs by checking if they have achievements on RetroAchievements.
+                             export RETRO_ACHIEVEMENTS_API_KEY=<your_api_key> needed.
     --move                   Move files instead of copying them. If this flag is omitted, files will be copied.
     --verbose                Print detailed logs of the operations being performed.
     --help                   Display this help message and exit.
 """
     print(help_text)
+    print_console_ids()
 
 
 # SUA API KEY DO RETROACHIEVEMENTS
@@ -47,46 +50,52 @@ RETRO_ACHIEVEMENTS_BASE_URL_GAMES = "https://retroachievements.org/API/API_GetGa
 RETRO_ACHIEVEMENTS_BASE_URL_SYSTEM = "https://retroachievements.org/API/API_GetConsoleIDs.php"
 
 
-def is_file_expired (path):
+def recriate_file_if_expired(path):
     """Checks if the file is expired (24 hours)."""
+    """ If the file is expired, it will be recreated. """
     if os.path.exists(path):
         file_time = os.path.getmtime(path)
         current_time = time.time()
-        return current_time - file_time > 86400
-    else:
-        return True
+        if current_time - file_time > 86400:
+            print(f"File {path} is expired. Recreating...")
+            url = f"{RETRO_ACHIEVEMENTS_BASE_URL_SYSTEM}?y={RETRO_ACHIEVEMENTS_API_KEY}"
+            try:
+                response = requests.get(url)
+                response.raise_for_status()
+                consoles = response.json()
+                with open(".consoles.json", "w") as file:
+                    json.dump(consoles, file)
+            except requests.RequestException as e:
+                print(f"Error to get information from API RetroAchievements: {e}")
 
-def get_RA_console_ids():
-    """ Generates a list of consoles.
-        Creates a file with the list of consoles if it doesn't exist or is expired.
-    """
+
+def print_console_ids():
+    """ Get and print a list of IDS and console names. """
+
+    # open .consoles.json
     consoles = None
-
-    if not is_file_expired(".consoles.json"):
-        print("File is not expired")
-        with open(".consoles.json", "r") as file:
-            consoles = json.load(file)
-    else:
-        url = f"{RETRO_ACHIEVEMENTS_BASE_URL_SYSTEM}?y={RETRO_ACHIEVEMENTS_API_KEY}&a=1&g=1"
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            consoles = response.json()
-            with open(".consoles.json", "w") as file:
-                json.dump(consoles, file)
-        except requests.RequestException as e:
-            print(f"Error to get information from API RetroAchievements: {e}")
-
-    return consoles
-
-def parsing_RA_console_ids(name):
-    """ Returns the ID of a console based on its name. """
-    consoles = get_RA_console_ids()
+    recriate_file_if_expired(".consoles.json")
+    with open(".consoles.json", "r") as file:
+        consoles = json.load(file)
+    
+    print("Valids consoles ID:")
     for console in consoles:
-        if console["Name"] == name:
-            return console["ID"]
+        print(f"ID: {console['ID']} --- {console['Name']}")
 
-    return None
+def is_id_valid(id):
+    """ Get the console ID from the user. """
+    """ Validates the console ID provided by the user. """
+    if not id.isdigit():
+        print("Error: Console ID must be a number.")
+        sys.exit(1)
+    recriate_file_if_expired(".consoles.json")
+    with open(".consoles.json", "r") as file:
+        consoles = json.load(file)
+        for console in consoles:
+            if console['ID'] == int(id):
+                return True
+    return False
+
 
 def get_RA_game_info(console_id):
     """ Generates a list of games for a specific console ID.
@@ -94,26 +103,13 @@ def get_RA_game_info(console_id):
     """
     games = None
 
-    if not is_file_expired(f".{console_id}.json"):
-        print("File is not expired")
-        with open(f".{console_id}.json", "r") as file:
-            games = json.load(file)
-            print("arquivo do 32x aberto")
-    else:
-        url = f"{RETRO_ACHIEVEMENTS_BASE_URL_GAMES}?y={RETRO_ACHIEVEMENTS_API_KEY}&i={console_id}&h=1&f=1"
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            games = response.json()
-            with open(f".{console_id}.json", "w") as file:
-                json.dump(games, file)
-        except requests.RequestException as e:
-            print(f"Error to get information from API RetroAchievements: {e}")
+    recriate_file_if_expired(f".{console_id}.json")
+    with open(f".{console_id}.json", "r") as file:
+        games = json.load(file)
     return games
     
 def has_cheevos(games, game_hash):
     """ Checks if a game has achievements based on its hash. """
-    print(f'game hash: {game_hash.lower()}')
     for game in games:
         if "Hashes" in game and game_hash.lower() in game["Hashes"]:
             return True
@@ -203,13 +199,21 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
     unl_pattern = re.compile(r'\(unl\)', re.IGNORECASE) if opt_dict['u'] else None
     pirate_pattern = re.compile(r'\(pirate\)', re.IGNORECASE) if opt_dict['P'] else None
     prototype_pattern = re.compile(r'\((?:prototype|proto)\)', re.IGNORECASE) if opt_dict['p'] else None
-    country_pattern = re.compile(rf'{opt_dict["country"]}', re.IGNORECASE) if opt_dict['country'] else None
+    grep_pattern = re.compile(rf'{opt_dict["grep"]}', re.IGNORECASE) if opt_dict['grep'] else None
 
-    console_id = parsing_RA_console_ids(opt_dict['cheevos'])
+    console_id = opt_dict['cheevos']
+    print(f"Console ID: {console_id}")
     if console_id:
-        game_hashes = get_RA_game_info(console_id)
-        print("Game hashes loaded")
-        print(game_hashes)
+        if not RETRO_ACHIEVEMENTS_API_KEY:
+            print("Error: RETRO_ACHIEVEMENTS_API_KEY environment variable is not set.")
+            sys.exit(1)
+        if (not is_id_valid(console_id)):
+            print_console_ids()
+            sys.exit(1)
+        if console_id:
+            game_hashes = get_RA_game_info(console_id)
+            print("Game hashes loaded")
+            print(game_hashes)
 
     seen = set()
     processed_count = 0
@@ -240,7 +244,7 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
         if prototype_pattern and prototype_pattern.search(file_name):
             should_process = True
 
-        if country_pattern and country_pattern.search(file_name):
+        if grep_pattern and grep_pattern.search(file_name):
             should_process = True
 
         if console_id:
@@ -295,7 +299,7 @@ if __name__ == '__main__':
         "u": False,
         "p": False,
         "P": False,
-        "country": None,
+        "grep": None,
         "dat": None,
         "cheevos": None
     }
@@ -313,12 +317,12 @@ if __name__ == '__main__':
                 else:
                     print(f"Invalid filter option: -{char}")
                     sys.exit(1)
-        elif arg.startswith('--country'):
-            country = arg.split('=')[1] if '=' in arg else None
-            if not country:
-                print("Error: Missing country name after --country=")
+        elif arg.startswith('--grep'):
+            grep = arg.split('=')[1] if '=' in arg else None
+            if not grep:
+                print("Error: Missing key word after --grep=")
                 sys.exit(1)
-            opt_dict["country"] = country
+            opt_dict["grep"] = grep
         elif arg.startswith('--dat'):
             dat_file = arg.split('=')[1] if '=' in arg else None
             if not dat_file or not os.path.exists(dat_file):
