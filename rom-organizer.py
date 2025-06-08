@@ -11,6 +11,13 @@ import requests
 import json
 import time
 
+# SUA API KEY DO RETROACHIEVEMENTS
+RETRO_ACHIEVEMENTS_API_KEY = os.getenv("RETRO_ACHIEVEMENTS_API_KEY")
+RETRO_ACHIEVEMENTS_BASE_URL_GAMES = "https://retroachievements.org/API/API_GetGameList.php"
+RETRO_ACHIEVEMENTS_BASE_URL_SYSTEM = "https://retroachievements.org/API/API_GetConsoleIDs.php"
+HOME = os.getenv("HOME")
+CONFIG_FILES_PATH = HOME + "/.config/rom-organizer/"
+CONSOLE_ID_FILE = CONFIG_FILES_PATH + "consoles.json"
 
 def display_help():
     """Displays usage instructions and details about each parameter."""
@@ -42,41 +49,55 @@ Options:
     --help                   Display this help message and exit.
 """
     print(help_text)
-    print_console_ids()
+    if RETRO_ACHIEVEMENTS_API_KEY:
+        print_console_ids()
 
-
-# SUA API KEY DO RETROACHIEVEMENTS
-RETRO_ACHIEVEMENTS_API_KEY = os.getenv("RETRO_ACHIEVEMENTS_API_KEY")
-RETRO_ACHIEVEMENTS_BASE_URL_GAMES = "https://retroachievements.org/API/API_GetGameList.php"
-RETRO_ACHIEVEMENTS_BASE_URL_SYSTEM = "https://retroachievements.org/API/API_GetConsoleIDs.php"
-
-
-def recriate_file_if_expired(path):
+def recriate_file_if_expired(path, console_id = None):
     """Checks if the file is expired (24 hours)."""
     """ If the file is expired, it will be recreated. """
+
+    if not RETRO_ACHIEVEMENTS_API_KEY:
+        print("export RETRO_ACHIEVEMENTS_API_KEY=<your_api_key> needed.")
+        exit(1)
+
+    url = None
+    if not console_id:
+        url = f"{RETRO_ACHIEVEMENTS_BASE_URL_SYSTEM}?y={RETRO_ACHIEVEMENTS_API_KEY}"
+    else:
+        url = f"{RETRO_ACHIEVEMENTS_BASE_URL_GAMES}?y={RETRO_ACHIEVEMENTS_API_KEY}&i={console_id}&h=1&f=1"
+    if not os.path.exists(CONFIG_FILES_PATH):
+        os.makedirs(CONFIG_FILES_PATH)
+
     if os.path.exists(path):
         file_time = os.path.getmtime(path)
         current_time = time.time()
         if current_time - file_time > 86400:
             print(f"File {path} is expired. Recreating...")
-            url = f"{RETRO_ACHIEVEMENTS_BASE_URL_SYSTEM}?y={RETRO_ACHIEVEMENTS_API_KEY}"
             try:
                 response = requests.get(url)
                 response.raise_for_status()
                 consoles = response.json()
-                with open(".consoles.json", "w") as file:
+
+                with open(path, "w") as file:
                     json.dump(consoles, file)
             except requests.RequestException as e:
                 print(f"Error to get information from API RetroAchievements: {e}")
-
+    else:
+        print(f"File {path} do not exist. Recreating...")
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            consoles = response.json()
+            with open(path, "w") as file:
+                json.dump(consoles, file)
+        except requests.RequestException as e:
+            print(f"Error to get information from API RetroAchievements: {e}")
 
 def print_console_ids():
     """ Get and print a list of IDS and console names. """
-
-    # open .consoles.json
     consoles = None
-    recriate_file_if_expired(".consoles.json")
-    with open(".consoles.json", "r") as file:
+    recriate_file_if_expired(CONSOLE_ID_FILE)
+    with open(CONSOLE_ID_FILE, "r") as file:
         consoles = json.load(file)
     
     print("Valids consoles ID:")
@@ -89,8 +110,8 @@ def is_id_valid(id):
     if not id.isdigit():
         print("Error: Console ID must be a number.")
         sys.exit(1)
-    recriate_file_if_expired(".consoles.json")
-    with open(".consoles.json", "r") as file:
+    recriate_file_if_expired(CONSOLE_ID_FILE)
+    with open(CONSOLE_ID_FILE, "r") as file:
         consoles = json.load(file)
         for console in consoles:
             if console['ID'] == int(id):
@@ -104,13 +125,15 @@ def get_RA_game_info(console_id):
     """
     games = None
 
-    recriate_file_if_expired(f".{console_id}.json")
-    with open(f".{console_id}.json", "r") as file:
+    recriate_file_if_expired(f"{CONFIG_FILES_PATH}{console_id}.json", console_id)
+    with open(f"{CONFIG_FILES_PATH}/{console_id}.json", "r") as file:
         games = json.load(file)
     return games
     
 def has_cheevos(games, game_hash):
     """ Checks if a game has achievements based on its hash. """
+    if not game_hash:
+        return False
     for game in games:
         if "Hashes" in game and game_hash.lower() in game["Hashes"]:
             return True
@@ -144,6 +167,14 @@ def calculate_md5(file_path):
         return None
 
     return hash_md5.hexdigest().upper()
+
+def get_arcade_md5(file_path):
+    """ Returns the MD5 hash of a arcade file. """
+    print("arcade")
+    if not os.path.isfile(file_path):
+        print("Error: File does not exist.")
+        return None
+    return calculate_md5(file_path)
 
 def get_md5(file_path):
     """ Returns the MD5 hash of a file. """
@@ -201,10 +232,9 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
     pirate_pattern = re.compile(r'\(pirate\)', re.IGNORECASE) if opt_dict['P'] else None
     beta_pattern = re.compile(r'\(beta\)', re.IGNORECASE) if opt_dict['b'] else None
     prototype_pattern = re.compile(r'\((?:prototype|proto)\)', re.IGNORECASE) if opt_dict['p'] else None
-    grep_pattern = re.compile(rf'{opt_dict["grep"]}', re.IGNORECASE) if opt_dict['grep'] else None
+    grep_pattern = re.compile(re.escape(opt_dict["grep"]), re.IGNORECASE) if opt_dict['grep'] else None
 
     console_id = opt_dict['cheevos']
-    print(f"Console ID: {console_id}")
     if console_id:
         if not RETRO_ACHIEVEMENTS_API_KEY:
             print("Error: RETRO_ACHIEVEMENTS_API_KEY environment variable is not set.")
@@ -214,8 +244,6 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
             sys.exit(1)
         if console_id:
             game_hashes = get_RA_game_info(console_id)
-            print("Game hashes loaded")
-            print(game_hashes)
 
     seen = set()
     processed_count = 0
@@ -232,31 +260,35 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
             continue
         seen.add(file_name)
 
-        should_process = False
+        should_process = True
 
-        if demo_pattern and demo_pattern.search(file_name):
-            should_process = True
+        if demo_pattern and not demo_pattern.search(file_name):
+            should_process = False
 
-        if unl_pattern and unl_pattern.search(file_name):
-            should_process = True
+        if unl_pattern and not unl_pattern.search(file_name):
+            should_process = False
 
-        if pirate_pattern and pirate_pattern.search(file_name):
-            should_process = True
+        if pirate_pattern and not pirate_pattern.search(file_name):
+            should_process = False
 
-        if prototype_pattern and prototype_pattern.search(file_name):
-            should_process = True
-        
-        if beta_pattern and beta_pattern.search(file_name):
-            should_process = True
+        if prototype_pattern and not prototype_pattern.search(file_name):
+            should_process = False
 
-        if grep_pattern and grep_pattern.search(file_name):
-            should_process = True
+        if beta_pattern and not beta_pattern.search(file_name):
+            should_process = False
+
+        if grep_pattern and not grep_pattern.search(file_name):
+            should_process = False
 
         if console_id:
-            should_process = True if has_cheevos(game_hashes, get_md5(file_path)) else False
+            hash_func = get_arcade_md5 if console_id == "27" else get_md5
+            game_hash = hash_func(file_path)
+            if not has_cheevos(game_hashes, game_hash):
+                should_process = False
 
         if md5_set:
-            should_process = True if get_md5(file_path) in md5_set else False
+            if get_md5(file_path) not in md5_set:
+                should_process = False
 
         if should_process:
             dest_file_path = os.path.join(destination_dir, file)
@@ -284,6 +316,7 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
 
 # Main entry point of the script
 if __name__ == '__main__':
+
     if len(sys.argv) < 4 or '--help' in sys.argv:
         display_help()
         sys.exit(0)

@@ -21,7 +21,7 @@ To use the script, run it from the command line with the following syntax:
 To use to check if game has achievements on retroachievements.org
 Check your api key in: retroachevements.org/settings
 ```bash
-export export RETRO_ACHIEVEMENTS_API_KEY=<your_api_key> && ./rom-organizer.py <source_directory> <destination_directory> [--cheevos=<ID>]
+export RETRO_ACHIEVEMENTS_API_KEY=<your_api_key> && ./rom-organizer.py <source_directory> <destination_directory> [--cheevos=<ID>]
 ```
 
 ### Parameters
@@ -59,6 +59,5 @@ Example 3: Move ROMs with "prototype" and "unl"
 
 ### Notes
 
-    The script can handle multiple filters at once. For example, -d -u will move ROMs that contain both "demo" and "unl".
-    If the --country parameter is specified, only ROMs containing that country name in their filename will be moved.
+    The script can handle multiple filters at once. For example, -d -u will copy ROMs that contain both "demo" and "unl".
 
