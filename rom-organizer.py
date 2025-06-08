@@ -39,7 +39,7 @@ Options:
     -p                       Process ROMs containing "(prototype)" or "(proto)" in their filenames.
     -b                       Process ROMs containing "(beta)" in their filenames.
     -P                       Process ROMs containing "(pirate)" in their filenames (alternative to -u).
-    --grep=<key word>        Process ROMs containing the specified key word in their filenames.
+    --grep=<key word>        Add extra filters. All --grep terms must be present in the filename (logical AND). This refines the matches from -d, -u, -p, or -P.
     --dat=<dat_file>         Filter ROMs by MD5 using the provided .dat file.
                              If the file is a .zip, it will be temporarily extracted for MD5 checking.
     --cheevos=<console_id>   Filter ROMs by checking if they have achievements on RetroAchievements.
@@ -220,30 +220,29 @@ def get_md5(file_path):
 def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, verbose=False):
     """Copies or moves ROM files based on the provided filters."""
 
-    console_id = None
+    console_id = opt_dict.get('cheevos')
     game_hashes = None
 
     if not os.path.exists(destination_dir):
         os.makedirs(destination_dir)
-            
-    # RE
-    demo_pattern = re.compile(r'\(demo\)', re.IGNORECASE) if opt_dict['d'] else None
-    unl_pattern = re.compile(r'\(unl\)', re.IGNORECASE) if opt_dict['u'] else None
-    pirate_pattern = re.compile(r'\(pirate\)', re.IGNORECASE) if opt_dict['P'] else None
-    beta_pattern = re.compile(r'\(beta\)', re.IGNORECASE) if opt_dict['b'] else None
-    prototype_pattern = re.compile(r'\((?:prototype|proto)\)', re.IGNORECASE) if opt_dict['p'] else None
-    grep_pattern = re.compile(re.escape(opt_dict["grep"]), re.IGNORECASE) if opt_dict['grep'] else None
 
-    console_id = opt_dict['cheevos']
+    # Compila regex apenas se filtros ativados
+    demo_pattern = re.compile(r'\(demo\)', re.IGNORECASE) if opt_dict.get('d') else None
+    unl_pattern = re.compile(r'\(unl\)', re.IGNORECASE) if opt_dict.get('u') else None
+    pirate_pattern = re.compile(r'\(pirate\)', re.IGNORECASE) if opt_dict.get('P') else None
+    beta_pattern = re.compile(r'\(beta\)', re.IGNORECASE) if opt_dict.get('b') else None
+    prototype_pattern = re.compile(r'\((?:prototype|proto)\)', re.IGNORECASE) if opt_dict.get('p') else None
+    grep_patterns = [re.compile(re.escape(word), re.IGNORECASE) for word in opt_dict.get("grep", [])]
+
+    # Configuração cheevos
     if console_id:
         if not RETRO_ACHIEVEMENTS_API_KEY:
             print("Error: RETRO_ACHIEVEMENTS_API_KEY environment variable is not set.")
             sys.exit(1)
-        if (not is_id_valid(console_id)):
+        if not is_id_valid(console_id):
             print_console_ids()
             sys.exit(1)
-        if console_id:
-            game_hashes = get_RA_game_info(console_id)
+        game_hashes = get_RA_game_info(console_id)
 
     seen = set()
     processed_count = 0
@@ -254,46 +253,54 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
         if not os.path.isfile(file_path):
             continue
 
-        file_name = os.path.splitext(file)[0]  # Get the file name without extension
-
-        if file_name in seen:
+        if file in seen:
             continue
-        seen.add(file_name)
+        seen.add(file)
 
+        lower_name = file.lower()
+
+        # Decide se deve processar o arquivo
         should_process = True
 
-        if demo_pattern and not demo_pattern.search(file_name):
-            should_process = False
+        # Verifica filtros base (d, u, p, P, b)
+        base_filters = []
+        if demo_pattern:
+            base_filters.append(bool(demo_pattern.search(lower_name)))
+        if unl_pattern:
+            base_filters.append(bool(unl_pattern.search(lower_name)))
+        if prototype_pattern:
+            base_filters.append(bool(prototype_pattern.search(lower_name)))
+        if pirate_pattern:
+            base_filters.append(bool(pirate_pattern.search(lower_name)))
+        if beta_pattern:
+            base_filters.append(bool(beta_pattern.search(lower_name)))
 
-        if unl_pattern and not unl_pattern.search(file_name):
-            should_process = False
+        if base_filters:
+            # Se algum filtro base não for satisfeito, não processa
+            if not any(base_filters):
+                should_process = False
 
-        if pirate_pattern and not pirate_pattern.search(file_name):
-            should_process = False
+        # Aplica filtros grep: todos devem estar presentes no nome
+        if grep_patterns:
+            if not all(pattern.search(lower_name) for pattern in grep_patterns):
+                should_process = False
 
-        if prototype_pattern and not prototype_pattern.search(file_name):
-            should_process = False
-
-        if beta_pattern and not beta_pattern.search(file_name):
-            should_process = False
-
-        if grep_pattern and not grep_pattern.search(file_name):
-            should_process = False
-
-        if console_id:
+        # Verifica se tem achievements se cheevos ativado
+        if should_process and console_id:
             hash_func = get_arcade_md5 if console_id == "27" else get_md5
             game_hash = hash_func(file_path)
             if not has_cheevos(game_hashes, game_hash):
                 should_process = False
 
-        if md5_set:
+        # Verifica MD5 se filtro md5_set ativo
+        if should_process and md5_set:
             if get_md5(file_path) not in md5_set:
                 should_process = False
 
+        # Se passar nos filtros, copia ou move o arquivo
         if should_process:
             dest_file_path = os.path.join(destination_dir, file)
 
-            # Move or copy file
             if move_files:
                 if os.path.exists(dest_file_path):
                     shutil.copy(file_path, dest_file_path)
@@ -312,6 +319,7 @@ def process_roms(source_dir, destination_dir, opt_dict, md5_set, move_files, ver
             processed_count += 1
 
     print(f"Organization completed! Total files processed: {processed_count}")
+
 
 
 # Main entry point of the script
@@ -338,7 +346,7 @@ if __name__ == '__main__':
         "p": False,
         "b": False,
         "P": False,
-        "grep": None,
+        "grep": [],
         "dat": None,
         "cheevos": None
     }
@@ -349,6 +357,11 @@ if __name__ == '__main__':
 
     args = sys.argv[3:]
     for arg in args:
+
+
+
+
+        # Process command line arguments
         if arg.startswith('-') and not arg.startswith('--'):
             for char in arg[1:]:
                 if char in opt_dict:
@@ -361,7 +374,7 @@ if __name__ == '__main__':
             if not grep:
                 print("Error: Missing key word after --grep=")
                 sys.exit(1)
-            opt_dict["grep"] = grep
+            opt_dict["grep"].append(grep)
         elif arg.startswith('--dat'):
             dat_file = arg.split('=')[1] if '=' in arg else None
             if not dat_file or not os.path.exists(dat_file):
@@ -374,6 +387,19 @@ if __name__ == '__main__':
             move_files = True
         elif arg.startswith('--cheevos'):
             opt_dict['cheevos'] = arg.split('=')[1] if '=' in arg else None
+
+        # Check for exclusive options
+        if opt_dict.get('dat'):  # Se dat tem valor (string)
+            forbidden = [k for k, v in opt_dict.items() if k != 'dat' and v and k != 'grep']
+            if forbidden or (opt_dict.get('grep') and len(opt_dict['grep']) > 0) or opt_dict.get('cheevos'):
+                print("Error: When using --dat, no other filters (e.g. -p, -d, --grep, --cheevos) are allowed.")
+                sys.exit(1)
+
+        if opt_dict.get('cheevos'):
+            forbidden = [k for k, v in opt_dict.items() if k != 'cheevos' and v and k != 'grep']
+            if forbidden or (opt_dict.get('grep') and len(opt_dict['grep']) > 0) or opt_dict.get('dat'):
+                print("Error: When using --cheevos, no other filters (e.g. -p, -d, --grep, --dat) are allowed.")
+                sys.exit(1)
 
     # If a .dat file was provided, get the MD5 hashes
     md5_set = set()
